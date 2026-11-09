@@ -6,10 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "rag-eval"
 version = "0.1.0"
 description = "Construct validity of automated evaluation frameworks for RAG systems (Bachelor's thesis)"
-# Die Obergrenzen kommen von torch: Für Intel-Macs gibt es keine Wheels nach
-# torch 2.2.2 und keine für Python 3.13, und torch 2.2.2 ist gegen numpy 1.x
-# gebaut. Die exakte Umgebung steht in requirements.lock.txt. Auf Plattformen
-# mit neuerem torch können die Grenzen gelockert werden.
+# Die Obergrenzen kommen von torch: Für Intel-Macs gibt es keine Wheels nach torch 2.2.2 und keine für Python 3.13, und torch 2.2.2 ist gegen numpy 1.x gebaut.
+# Die exakte Umgebung steht in requirements.lock.txt. Auf Plattformen mit neuerem torch können die Grenzen gelockert werden.
 requires-python = ">=3.11,<3.13"
 dependencies = [
     # RAG-Pipeline

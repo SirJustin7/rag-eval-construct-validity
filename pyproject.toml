@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rag-eval"
+version = "0.1.0"
+description = "Construct validity of automated evaluation frameworks for RAG systems (Bachelor's thesis)"
+# Die Obergrenzen kommen von torch: Für Intel-Macs gibt es keine Wheels nach
+# torch 2.2.2 und keine für Python 3.13, und torch 2.2.2 ist gegen numpy 1.x
+# gebaut. Die exakte Umgebung steht in requirements.lock.txt. Auf Plattformen
+# mit neuerem torch können die Grenzen gelockert werden.
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    # RAG-Pipeline
+    "openai>=1.0",              # Generator und Judge (OpenAI-kompatible Endpunkte)
+    "chromadb>=0.5",
+    "sentence-transformers",
+    "torch<2.3",
+    "transformers<4.45",        # ab 4.45 wird torch>=2.4 verlangt
+    # Evaluationsframeworks
+    "ragas",
+    "trulens-eval",
+    "deepeval",
+    # Daten
+    "datasets",
+    "pandas",
+    "pyarrow",
+    "openpyxl",
+    "tabulate",
+    # Analyse
+    "numpy<2",
+    "scipy<1.13",
+    "scikit-learn<1.5",
+    "matplotlib",
+    "seaborn",
+    # Sonstiges
+    "pydantic>=2",
+    "pyyaml",
+    "python-dotenv",
+    "tqdm",
+    "setuptools<81",            # pkg_resources, wird von trulens importiert
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,19 @@
+.env
+.venv/
+__pycache__/
+*.egg-info/
+.ruff_cache/
+.DS_Store
+.deepeval/
+.obsidian/
+
+# Rohdaten und Index werden lokal erzeugt
+data/raw/
+data/vector_stores/
+data/processed/*_samples.jsonl
+
+# Wird von scripts/02b aus dem Repository von Simon et al. erzeugt
+data/processed/depvalidation_generated.jsonl
+
+# Verbrauch der eigenen Läufe
+results/usage.jsonl

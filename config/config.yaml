@@ -1,0 +1,140 @@
+seed: 42
+
+# --- RAG-System ----------------------------------------------------------------
+rag:
+  embedding:
+    model: "sentence-transformers/all-MiniLM-L6-v2"
+    device: "cpu"
+  chunking:
+    # all-MiniLM-L6-v2 verarbeitet höchstens 256 Tokens, davon gehen 2 an [CLS]/[SEP]. Mit 254 wird kein Chunk beim Embedding abgeschnitten.
+    chunk_size: 254
+    chunk_overlap: 64
+  vector_store:
+    provider: "chromadb"
+    persist_dir: "data/vector_stores"
+  retrieval:
+    # Für alle Domänen gleich. Die Gold-Dokumente sind unterschiedlich lang (hotpotqa ca. 4 Chunks, finqa ca. 6, techqa ca. 25, bis 57).
+    # Bei top_k=5 sah der Retriever in techqa nur ein Fünftel des relevanten Dokuments und das System verweigerte dort die meisten Antworten.
+    # k=5 läuft zusätzlich über --top-k als Vergleich.
+    top_k: 10
+    similarity: "cosine"
+    # pooled:     eine Collection je Datensatz
+    # per_domain: eine Collection je Domäne (CRAG 5, RAGBench 3)
+    # per_domain, weil CRAGs Suchergebnisse je Frage gesammelt wurden und ein gemeinsamer Index aller Fragen kein reales System abbildet.
+    scope: "per_domain"
+  generator:
+    # Über SCADS.AI, Endpunkt in .env (GENERATOR_*).
+    # Anderes Modell als Judge, um Selbstbevorzugung zu vermeiden.
+    model: "google/gemma-4-26B-A4B-it"
+    temperature: 0.0
+    max_tokens: 512
+    request_timeout: 120
+    system_prompt: >
+      Answer the question based ONLY on the provided context.
+      If the context does not contain the answer, say so explicitly.
+
+# --- Judge -------------------------------------------------------------------------
+# Obergrenze (Euro) für alle Judge-Aufrufe zusammen, gerechnet über results/usage.jsonl.
+budget:
+  gesamt_eur: 36.65
+
+judge:
+  # Für alle Frameworks derselbe Judge. Weitere Judges laufen über scripts/03 --judge-model, der Judge steht im Dateinamen der Scores.
+  model: "gpt-4o-mini"
+  temperature: 0.0
+  # Betrifft nur Ragas, das sonst auf 1024 Ausgabetokens begrenzt.
+  # Bei Antworten mit vielen Einzelaussagen reicht das für das JSON nicht und der Score fehlt.
+  max_tokens: 4096
+  request_timeout: 120
+
+# --- Frameworks ----------------------------------------------------------------------
+frameworks:
+  ragas:
+    enabled: true
+    version: "0.4.3"
+  trulens:
+    enabled: true
+    # Provider aus trulens-feedback, Endpunkt aus trulens-core.
+    version: "trulens-core 1.4.5 / trulens-feedback 1.5.3"
+    rpm: 60 # Ratenbegrenzung des Endpunkts
+    # Der Judge vergibt 0 bis 3 Punkte. TruLens rechnet das selbst auf [0, 1] um.
+    score_range: [0, 3]
+  deepeval:
+    enabled: true
+    version: "2.9.3"
+    # Context Relevance über ContextualRelevancyMetric, nicht über ContextualPrecisionMetric.
+    # Das bewertet sonst die Rangfolge der Chunks und braucht eine Referenzantwort.
+
+# --- Datensätze ----------------------------------------------------------------------
+datasets:
+  crag:
+    enabled: true
+    source: "hf"
+    # Unveränderte Release-Datei von Meta (Task 1, 2.706 Fragen), auf HuggingFace gespiegelt.
+    hf_id: "Rickyoung0221/crag"
+    hf_file: "crag_task_1_dev_v4_release.jsonl.bz2"
+    local_file: "data/raw/crag/crag_task_1_dev_v4_release.jsonl.bz2"
+    domains: ["finance", "sports", "music", "movie", "open"]
+    # Feld, das bei scope per_domain die Collection bestimmt.
+    domain_field: "domain"
+    # Gleich groß wie ragbench, damit beide in der gepoolten Auswertung gleich gewichtet sind.
+    # CRAG hat deutlich mehr Chunks je Frage (Median 37).
+    sample_size: 333
+  ragbench:
+    enabled: true
+    source: "hf"
+    hf_id: "rungalileo/ragbench"
+    # hotpotqa: Allgemeinwissen, multi-hop
+    # finqa:    Finanzberichte, numerisch und tabellarisch
+    # techqa:   technischer Support mit langen Gold-Dokumenten
+    # sample_size wird gleichmäßig auf die Subsets verteilt.
+    subsets: ["hotpotqa", "finqa", "techqa"]
+    domain_field: "subset"
+    sample_size: 333
+  # --- Manipulationsbedingungen ----------------------------------------------------
+  # Erzeugt von scripts/07_manipulate.py aus dem CRAG-Lauf (top_k 10, per_domain).
+  # Ohne Indexierung und Generierung, deshalb source local. Die Herkunft steht in jeder Zeile unter meta.rag_system.
+  # enabled false, damit ein Lauf ohne --dataset sie nicht mitbewertet.
+  # Bewertung einzeln: python scripts/03_run_frameworks.py --dataset crag_inject_1
+  crag_inject_1:
+    enabled: false
+    source: "local"
+  crag_inject_2:
+    enabled: false
+    source: "local"
+  crag_inject_3:
+    enabled: false
+    source: "local"
+  crag_replace_full:
+    enabled: false
+    source: "local"
+  # Tausch genau einer Zahl der Antwort gegen eine falsche. Nur Antworten mit einer Zahl ab 10, die im Kontext und nicht in der Frage steht (34 von 100).
+  crag_swap_fact:
+    enabled: false
+    source: "local"
+  ragbench_own:
+    # RAGBench mit RAGBenchs eigener Antwort statt der des eigenen Generators.
+    # Die TRACe-Labels bewerten genau diesen Text, nur so urteilen alle vier Methoden über dieselbe Antwort.
+    #     python scripts/02c_import_ragbench_own.py
+    #     python scripts/03_run_frameworks.py --dataset ragbench_own
+    enabled: false
+    source: "local"
+    # Subsets, Stichprobengröße und Seed kommen aus dem ragbench-Block, damit dieselben Fragen gezogen werden.
+  depvalidation:
+    # Simon et al. Fertige Tripel aus Frage, Kontext und Antwort mit menschlich vergebener Ground Truth, daher ohne 01/02.
+    #     python scripts/02b_import_depvalidation.py
+    #     python scripts/03_run_frameworks.py --dataset depvalidation
+    enabled: false
+    source: "local"
+    url: "https://github.com/simisimon/dependency-validation-rag"
+    repo_path: "data/raw/dependency-validation-rag"
+    # Zwei RAG-Varianten und zwei Generatoren. config1/config4 nutzen denselben Reranker, aber verschiedene Embedding-Modelle und 5 bzw. 3 Chunks.
+    variants: ["config1", "config4"]
+    models: ["gpt-4o-2024-05-13", "llama3:8b"]
+    sample_size: 200
+    balance_correct: false
+
+paths:
+  raw: "data/raw"
+  processed: "data/processed"
+  results: "results"
